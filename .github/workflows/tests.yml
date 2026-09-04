@@ -1,0 +1,49 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # Windows is in the matrix on purpose: the console defaults to a
+        # legacy code page there, which is how the Unicode printing bug in
+        # cli.py was found in the first place.
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run tests
+        run: python -m pytest tests/ -q
+        env:
+          PYTHONPATH: src
+
+      # The README's own commands, executed. The original version of this
+      # project documented a CLI that was never committed, so every
+      # install instruction failed. This step makes that impossible.
+      - name: Verify the README quickstart
+        shell: bash
+        env:
+          PYTHONPATH: src
+        run: |
+          python experiments/make_images.py
+          python -m stego.cli train "images/*.png"
+          python -m stego.cli hide -i images/cover1_landscape.png \
+                                   -o secret.png -m "meeting at 7pm"
+          test "$(python -m stego.cli reveal -i secret.png)" = "meeting at 7pm"
+          python -m stego.cli selftest -i images/cover2_inverted.png
